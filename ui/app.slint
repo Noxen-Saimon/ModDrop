@@ -1,0 +1,603 @@
+import { ScrollView, LineEdit } from "std-widgets.slint";
+
+export struct LogEntry {
+    timestamp: string,
+    level: string,
+    message: string,
+    kind: int, // 0 = info, 1 = success, 2 = error, 3 = telemetry
+    is_latest: bool,
+}
+
+component CustomInput inherits Rectangle {
+    in-out property <string> text;
+    in property <string> placeholder;
+    in property <bool> enabled: true;
+    in property <bool> monospace: false;
+    callback edited(string);
+    callback accepted(string);
+
+    height: 38px;
+    background: root.enabled ? #1a1f29 : #141820;
+    border-radius: 6px;
+    border-width: 1px;
+    border-color: input-scope.has-focus ? #e09f3e : #293241;
+    animate border-color { duration: 150ms; }
+    clip: true;
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 12px;
+
+        Rectangle {
+            horizontal-stretch: 1;
+            clip: true;
+
+            if root.text == "" : Text {
+                text: root.placeholder;
+                color: #56637a;
+                font-family: root.monospace ? "JetBrains Mono, Cascadia Code, Berkeley Mono" : "Plus Jakarta Sans, Outfit, Geist";
+                font-size: 13px;
+                vertical-alignment: center;
+                horizontal-alignment: left;
+                width: 100%;
+                height: 100%;
+            }
+
+            input-scope := TextInput {
+                text <=> root.text;
+                enabled: root.enabled;
+                color: root.enabled ? #cdd6f4 : #6c7a96;
+                font-family: root.monospace ? "JetBrains Mono, Cascadia Code, Berkeley Mono" : "Plus Jakarta Sans, Outfit, Geist";
+                font-size: 13px;
+                vertical-alignment: center;
+                horizontal-alignment: left;
+                single-line: true;
+                width: 100%;
+                height: 100%;
+                edited => {
+                    root.edited(self.text);
+                }
+                accepted => {
+                    root.accepted(self.text);
+                }
+            }
+        }
+    }
+}
+
+component ActionButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> enabled: true;
+    in property <bool> primary: true;
+    callback clicked();
+
+    height: 40px;
+    border-radius: 6px;
+    border-width: root.primary ? 0px : 1px;
+    border-color: root.primary ? transparent : (touch.has-hover && root.enabled ? #e09f3e : #293241);
+    background: !root.enabled ? #1e2430 :
+                root.primary ? (touch.pressed ? #c47d20 : touch.has-hover ? #eab052 : #e09f3e) :
+                (touch.pressed ? #141820 : touch.has-hover ? #232a38 : #1a1f29);
+    animate background { duration: 120ms; }
+    animate border-color { duration: 120ms; }
+
+    Text {
+        text: root.text;
+        font-family: "Plus Jakarta Sans, Outfit, Geist";
+        font-size: 13px;
+        font-weight: root.primary ? 700 : 600;
+        color: !root.enabled ? #56637a : (root.primary ? #0c0e12 : #cdd6f4);
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? pointer : default;
+        clicked => {
+            root.clicked();
+        }
+    }
+}
+
+export component AppWindow inherits Window {
+    title: "ModDrop | Native Steam Workshop Utility";
+    icon: @image-url("../assets/icon.png");
+    min-width: 680px;
+    min-height: 580px;
+    preferred-width: 780px;
+    preferred-height: 680px;
+    background: #12151b;
+    default-font-family: "Plus Jakarta Sans, Outfit, Geist";
+
+    in-out property <string> game-id: "";
+    in-out property <string> game-name: "";
+    in-out property <bool> is-checking-game: false;
+    in-out property <string> mod-link: "";
+    in-out property <string> resolved-file-id: "";
+    in-out property <string> mod-title: "";
+    in-out property <string> location-path: "";
+    in-out property <bool> is-busy: false;
+    in-out property <float> progress: 0.0;
+    in-out property <string> status-badge: "READY";
+    in-out property <string> velocity-text: "0.00 MB/s";
+    in-out property <[LogEntry]> logs: [
+        {
+            timestamp: "00:00:00",
+            level: "SYS",
+            message: "ModDrop native telemetry console initialized. Ready for Steam Workshop deployment.",
+            kind: 0,
+            is_latest: true
+        }
+    ];
+
+    callback game-id-edited(string);
+    callback check-game-id();
+    callback mod-link-edited(string);
+    callback paste-mod-link();
+    callback location-path-edited(string);
+    callback browse-folder();
+    callback open-folder();
+    callback download-and-deploy();
+    callback clear-logs();
+
+    VerticalLayout {
+        padding: 24px;
+        spacing: 18px;
+
+        // Top Section: Header & Status
+        HorizontalLayout {
+            alignment: space-between;
+            VerticalLayout {
+                spacing: 4px;
+                HorizontalLayout {
+                    spacing: 12px;
+                    alignment: start;
+                    Image {
+                        source: @image-url("../assets/icon.png");
+                        width: 32px;
+                        height: 32px;
+                        vertical-alignment: center;
+                    }
+                    Text {
+                        text: "ModDrop";
+                        font-family: "Plus Jakarta Sans, Outfit, Geist";
+                        font-size: 24px;
+                        font-weight: 800;
+                        color: #cdd6f4;
+                        vertical-alignment: center;
+                    }
+                    Rectangle {
+                        height: 22px;
+                        width: 92px;
+                        y: 5px;
+                        border-radius: 4px;
+                        background: #1a1f29;
+                        border-width: 1px;
+                        border-color: #293241;
+                        Text {
+                            text: "WORKSHOP IO";
+                            font-family: "JetBrains Mono, Cascadia Code";
+                            font-size: 10px;
+                            font-weight: 700;
+                            color: #2ec4b6;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+                Text {
+                    text: "Native and Lightweight";
+                    font-family: "Plus Jakarta Sans, Outfit, Geist";
+                    font-size: 12px;
+                    color: #7c8aa6;
+                }
+            }
+
+            // Live Status & Download Velocity Badge
+            VerticalLayout {
+                alignment: center;
+                Rectangle {
+                    height: 34px;
+                    width: 175px;
+                    background: #0c0e12;
+                    border-radius: 6px;
+                    border-width: 1px;
+                    border-color: root.is-busy ? #e09f3e : #293241;
+
+                    HorizontalLayout {
+                        padding-left: 12px;
+                        padding-right: 12px;
+                        spacing: 8px;
+                        alignment: space-between;
+
+                        HorizontalLayout {
+                            spacing: 6px;
+                            Rectangle {
+                                width: 8px;
+                                height: 8px;
+                                y: 12px;
+                                border-radius: 4px;
+                                background: root.is-busy ? #e09f3e : #80ed99;
+                            }
+                            Text {
+                                text: root.status-badge;
+                                font-family: "JetBrains Mono, Cascadia Code";
+                                font-size: 11px;
+                                font-weight: 700;
+                                color: root.is-busy ? #e09f3e : #cdd6f4;
+                                vertical-alignment: center;
+                            }
+                        }
+
+                        Text {
+                            text: root.velocity-text;
+                            font-family: "JetBrains Mono, Cascadia Code";
+                            font-size: 11px;
+                            color: #80ed99;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Top Section: 3 Primary Inputs + Action Trigger
+        Rectangle {
+            background: #161a23;
+            border-radius: 8px;
+            border-width: 1px;
+            border-color: #293241;
+
+            VerticalLayout {
+                padding: 18px;
+                spacing: 14px;
+
+                // Row 1: ID Game (Auto-Detect)
+                HorizontalLayout {
+                    spacing: 14px;
+                    Text {
+                        text: "ID Game";
+                        width: 110px;
+                        font-size: 13px;
+                        font-weight: 600;
+                        color: #cdd6f4;
+                        vertical-alignment: center;
+                    }
+                    CustomInput {
+                        horizontal-stretch: 1;
+                        text <=> root.game-id;
+                        enabled: !root.is-busy;
+                        monospace: true;
+                        placeholder: "Steam AppID or URL (e.g., 294100 — auto-detected)";
+                        edited(val) => {
+                            root.game-id-edited(val);
+                        }
+                        accepted(val) => {
+                            root.check-game-id();
+                        }
+                    }
+                    if root.is-checking-game && root.game-name == "" : Rectangle {
+                        width: 110px;
+                        height: 38px;
+                        background: #0c0e12;
+                        border-radius: 6px;
+                        border-width: 1px;
+                        border-color: #e09f3e;
+                        HorizontalLayout {
+                            padding-left: 10px;
+                            padding-right: 10px;
+                            Text {
+                                text: "Checking...";
+                                font-family: "Plus Jakarta Sans, Outfit, Geist";
+                                font-size: 11px;
+                                font-weight: 600;
+                                color: #e09f3e;
+                                vertical-alignment: center;
+                                horizontal-alignment: center;
+                            }
+                        }
+                    }
+                    if root.game-name != "" : Rectangle {
+                        width: 155px;
+                        height: 38px;
+                        background: #0c0e12;
+                        border-radius: 6px;
+                        border-width: 1px;
+                        border-color: #80ed99;
+                        HorizontalLayout {
+                            padding-left: 10px;
+                            padding-right: 10px;
+                            Text {
+                                text: root.game-name;
+                                font-family: "Plus Jakarta Sans, Outfit, Geist";
+                                font-size: 11px;
+                                font-weight: 600;
+                                color: #80ed99;
+                                vertical-alignment: center;
+                                horizontal-alignment: center;
+                                overflow: elide;
+                            }
+                        }
+                    }
+                }
+
+                // Row 2: Link Mod
+                HorizontalLayout {
+                    spacing: 14px;
+                    Text {
+                        text: "Link Mod";
+                        width: 110px;
+                        font-size: 13px;
+                        font-weight: 600;
+                        color: #cdd6f4;
+                        vertical-alignment: center;
+                    }
+                    CustomInput {
+                        horizontal-stretch: 1;
+                        text <=> root.mod-link;
+                        enabled: !root.is-busy;
+                        monospace: true;
+                        placeholder: "https://steamcommunity.com/sharedfiles/filedetails/?id=... or PublishedFileId";
+                        edited(val) => {
+                            root.mod-link-edited(val);
+                        }
+                    }
+                    if root.resolved-file-id != "" : Rectangle {
+                        width: 155px;
+                        height: 38px;
+                        background: #0c0e12;
+                        border-radius: 6px;
+                        border-width: 1px;
+                        border-color: #2ec4b6;
+                        HorizontalLayout {
+                            padding-left: 10px;
+                            padding-right: 10px;
+                            Text {
+                                text: "ID: " + root.resolved-file-id;
+                                font-family: "JetBrains Mono, Cascadia Code";
+                                font-size: 11px;
+                                font-weight: 600;
+                                color: #2ec4b6;
+                                vertical-alignment: center;
+                                horizontal-alignment: center;
+                                overflow: elide;
+                            }
+                        }
+                    }
+                    ActionButton {
+                        width: 60px;
+                        height: 38px;
+                        text: "Paste";
+                        primary: false;
+                        enabled: !root.is-busy;
+                        clicked => {
+                            root.paste-mod-link();
+                        }
+                    }
+                }
+
+                // Row 3: Location Path + Compact Native File Picker Button (...)
+                HorizontalLayout {
+                    spacing: 14px;
+                    Text {
+                        text: "Location Path";
+                        width: 110px;
+                        font-size: 13px;
+                        font-weight: 600;
+                        color: #cdd6f4;
+                        vertical-alignment: center;
+                    }
+                    CustomInput {
+                        horizontal-stretch: 1;
+                        text <=> root.location-path;
+                        enabled: !root.is-busy;
+                        monospace: true;
+                        placeholder: "Select destination local game mod directory...";
+                        edited(val) => {
+                            root.location-path-edited(val);
+                        }
+                    }
+                    ActionButton {
+                        width: 46px;
+                        height: 38px;
+                        text: "...";
+                        primary: false;
+                        enabled: !root.is-busy;
+                        clicked => {
+                            root.browse-folder();
+                        }
+                    }
+                }
+
+                // Action Trigger Row
+                HorizontalLayout {
+                    spacing: 12px;
+                    padding-top: 4px;
+
+                    ActionButton {
+                        horizontal-stretch: 1;
+                        text: root.is-busy ? "DOWNLOADING & DEPLOYING..." : "Download & Deploy";
+                        primary: true;
+                        enabled: !root.is-busy;
+                        clicked => {
+                            root.download-and-deploy();
+                        }
+                    }
+
+                    ActionButton {
+                        width: 105px;
+                        text: "Open Folder";
+                        primary: false;
+                        enabled: !root.is-busy;
+                        clicked => {
+                            root.open-folder();
+                        }
+                    }
+
+                    ActionButton {
+                        width: 90px;
+                        text: "Clear Log";
+                        primary: false;
+                        enabled: !root.is-busy;
+                        clicked => {
+                            root.clear-logs();
+                        }
+                    }
+                }
+
+                // Subtle Progress Bar
+                Rectangle {
+                    height: 4px;
+                    background: #0c0e12;
+                    border-radius: 2px;
+                    clip: true;
+
+                    Rectangle {
+                        x: 0px;
+                        y: 0px;
+                        height: 100%;
+                        width: parent.width * clamp(root.progress, 0.0, 1.0);
+                        background: root.progress >= 1.0 ? #80ed99 : #e09f3e;
+                        animate width { duration: 120ms; }
+                    }
+                }
+            }
+        }
+
+        // 2. Divider: A crisp, subtle 1px separator line
+        Rectangle {
+            height: 1px;
+            background: #293241;
+        }
+
+        // 3. Bottom Section: Real-time event and progress console log
+        VerticalLayout {
+            vertical-stretch: 1;
+            spacing: 8px;
+
+            HorizontalLayout {
+                alignment: space-between;
+                Text {
+                    text: "EVENT & TELEMETRY CONSOLE";
+                    font-family: "JetBrains Mono, Cascadia Code";
+                    font-size: 11px;
+                    font-weight: 700;
+                    color: #7c8aa6;
+                }
+                Text {
+                    text: root.logs.length + " / 500 lines";
+                    font-family: "JetBrains Mono, Cascadia Code";
+                    font-size: 11px;
+                    color: #56637a;
+                }
+            }
+
+            Rectangle {
+                vertical-stretch: 1;
+                background: #0c0e12;
+                border-radius: 8px;
+                border-width: 1px;
+                border-color: #293241;
+                clip: true;
+
+                log-scroll := ScrollView {
+                    width: 100%;
+                    height: 100%;
+
+                    log-content := VerticalLayout {
+                        padding: 12px;
+                        spacing: 5px;
+                        alignment: start;
+
+                        // Whenever new logs are added and layout height changes,
+                        // automatically scroll down so the latest entry stays in view.
+                        changed height => {
+                            if (self.height > log-scroll.visible-height) {
+                                log-scroll.content-y = log-scroll.visible-height - self.height;
+                            } else {
+                                log-scroll.content-y = 0px;
+                            }
+                        }
+
+                        for entry in root.logs : Rectangle {
+                            border-radius: 4px;
+                            background: entry.is_latest ? #1a2233 : transparent;
+                            border-width: entry.is_latest ? 1px : 0px;
+                            border-color: entry.is_latest ? (entry.kind == 1 ? #80ed99 : entry.kind == 2 ? #f25c54 : #e09f3e) : transparent;
+                            animate background { duration: 150ms; }
+
+                            HorizontalLayout {
+                                padding-left: entry.is_latest ? 6px : 4px;
+                                padding-right: entry.is_latest ? 6px : 4px;
+                             
+                                padding-top: entry.is_latest ? 4px : 2px;
+                                padding-bottom: entry.is_latest ? 4px : 2px;
+                                spacing: 8px;
+                                alignment: start;
+
+                                Text {
+                                    text: "[" + entry.timestamp + "]";
+                                    font-family: "JetBrains Mono, Cascadia Code, Berkeley Mono";
+                                    font-size: 12px;
+                                    color: entry.is_latest ? #8b9bb4 : #56637a;
+                                    vertical-alignment: top;
+                                }
+
+                                Text {
+                                    text: "[" + entry.level + "]";
+                                    width: 52px;
+                                    font-family: "JetBrains Mono, Cascadia Code, Berkeley Mono";
+                                    font-size: 12px;
+                                    font-weight: 700;
+                                    color: entry.kind == 1 ? #80ed99 :
+                                           entry.kind == 2 ? #f25c54 :
+                                           entry.kind == 3 ? #2ec4b6 : #e09f3e;
+                                    vertical-alignment: top;
+                                }
+
+                                Text {
+                                    horizontal-stretch: 1;
+                                    text: entry.message;
+                                    font-family: "JetBrains Mono, Cascadia Code, Berkeley Mono";
+                                    font-size: 12px;
+                                    font-weight: entry.is_latest ? 600 : 400;
+                                    color: entry.is_latest ? #ffffff :
+                                           (entry.kind == 1 ? #80ed99 :
+                                           entry.kind == 2 ? #f25c54 :
+                                           entry.kind == 3 ? #2ec4b6 : #cdd6f4);
+                                    wrap: word-wrap;
+                                    vertical-alignment: top;
+                                }
+
+                                if entry.is_latest : Rectangle {
+                                    width: 62px;
+                                    height: 18px;
+                                    border-radius: 3px;
+                                    background: entry.kind == 1 ? #80ed99.with-alpha(0.18) :
+                                                entry.kind == 2 ? #f25c54.with-alpha(0.18) :
+                                                #e09f3e.with-alpha(0.20);
+                                    border-width: 1px;
+                                    border-color: entry.kind == 1 ? #80ed99 :
+                                                  entry.kind == 2 ? #f25c54 :
+                                                  #e09f3e;
+                                    Text {
+                                        text: "LATEST";
+                                        font-family: "JetBrains Mono, Cascadia Code";
+                                        font-size: 9px;
+                                        font-weight: 800;
+                                        color: entry.kind == 1 ? #80ed99 :
+                                               entry.kind == 2 ? #f25c54 :
+                                               #e09f3e;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

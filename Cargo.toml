@@ -1,0 +1,23 @@
+[package]
+name = "moddrop"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+chrono = "0.4.45"
+flate2 = "1.1.10"
+futures-util = "0.3.34"
+regex = "1.13.1"
+reqwest = { version = "0.13.5", features = ["json", "stream", "form"] }
+rfd = "0.17.2"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+slint = "1.18.1"
+tar = "0.4.46"
+tempfile = "3.27.0"
+tokio = { version = "1.54.1", features = ["full", "process", "io-util", "fs"] }
+zip = { version = "9.1.2", default-features = false, features = ["deflate"] }
+
+[build-dependencies]
+slint-build = "1.18.1"
+winres = "0.1"
