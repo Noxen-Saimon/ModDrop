@@ -1,4 +1,4 @@
-# ModDrop — Native Steam Workshop Utility
+# ModDrop | Native Steam Workshop Utility
 
 <p align="center">
   <img src="assets/icon.png" alt="ModDrop Logo" width="96" height="96" />
