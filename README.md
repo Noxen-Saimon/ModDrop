@@ -77,9 +77,3 @@ ModDrop keeps its working files in standard user application directories and doe
 - Saved folder preferences: `%LOCALAPPDATA%\ModDrop\config.json`
 - Portable SteamCMD runtime: `%LOCALAPPDATA%\ModDrop\bin\`
 - Staging directory: automatically removed after deployment completes.
-
----
-
-## License
-
-MIT
